@@ -33,8 +33,12 @@ print(imu.head())
 
 p1 = (imu["Lat"].max(), imu["Lon"].min())
 p2 =( imu["Lat"].min(), imu["Lon"].max())
-
+range_lat = abs(p1[0] - p2[0])
+range_lon = abs(p1[1] - p2[1])
 print("lat: ", p1)
 print("lon: ", p2)
 
+print(range_lat," > ",range_lon,range_lat>range_lon )
+
+print(array.shape)
 
