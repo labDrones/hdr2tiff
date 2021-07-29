@@ -1,15 +1,17 @@
 from spectral import *
 import pandas as pd
 import os 
+import platform
 
+path_sap = "/" if platform.system() != 'Windows' else "\\"
 
 def __check_frame(Fname):
     path = ""
     name = ""
-    spt = Fname.split("\\")
+    spt = Fname.split(path_sap)
     name = spt[-1]
     for i in spt[:-1]:
-        path = i+"\\"
+        path = i+path_sap
     del spt
     return True
 
@@ -38,10 +40,10 @@ def __check_files(Fname, imu):
 def get_frames(Fname):
     path = ""
     name = ""
-    spt = Fname.split("\\")
+    spt = Fname.split(path_sap)
     name = spt[-1]
     for i in spt[:-1]:
-        path = i+"\\"
+        path = i+path_sap
     del spt
     name = path+"frameIndex_"+(name.split('_')[-1].replace(".hdr", ".txt"))
     return pd.read_csv(name, sep="	")
