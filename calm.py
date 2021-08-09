@@ -32,9 +32,10 @@ def get_pixel_len(alt, fov = 22.1):
     return len
 
 def is_decreasing(imu, col):
-    first = imu.to_dict("records")[:21]
-    # imu["Lat"].max() ,imu["Lon"].max(
-    return round(first[0][col], 9) > round(first[-1][col], 9)
+    first = imu.to_dict("records")[:500]
+    # if first[0]['Roll'] >   0:
+    return not round(first[0][col], 7) > round(first[-1][col],7)
+    # return not (round(first[0][col], 7) > round(first[-1][col], 7))
     
 root = Tk()
 root.withdraw()
@@ -73,10 +74,11 @@ for hdr_name in imgs_names:
 
     imu = imu_base.loc[imu_base['Timestamp'].between( bounds[0]["Timestamp"],bounds[-1]["Timestamp"])]
     p = ax.plot(imu["Lat"], imu["Lon"])
-    
+    # imu.to_excel(tiff_name.replace("tiff", "xlsx"))
     view = imshow(array, title=tiff_name)
     # input("ok?")
 
+    pt = lonlat2utm.TransformPoint(imu.iloc[0]["Lat"] ,imu.iloc[0]["Lon"] )
     p1 = lonlat2utm.TransformPoint(imu["Lat"].max() ,imu["Lon"].max() )
     p2 = lonlat2utm.TransformPoint(imu["Lat"].min() ,imu["Lon"].min() )
 
@@ -84,15 +86,19 @@ for hdr_name in imgs_names:
     lat = {"Max":p1[0],"Min":p2[0] }
     
     print("lat", lat)
+    print("pt", pt)
     print("lon", lon)
-    lat_decreasing = -1 if is_decreasing(imu, "Lat") else 1
-    lon_decreasing = 1 if is_decreasing(imu, "Lon") else -1
+    lon_decreasing = 1 if is_decreasing(imu, "Lat") else -1
+    lat_decreasing = 1 if is_decreasing(imu, "Lon") else -1
+    print(lat_decreasing, lon_decreasing, get_pixel_len(100))
     boundary = {}
     boundary["lat"] = lat["Min"] if lat_decreasing > 0 else lat["Max"]
     boundary["lon"] = lon["Min"] if lon_decreasing > 0 else lon["Max"]
-    print(array.shape)
-    transform = [boundary["lat"], lat_decreasing*get_pixel_len(100), 0, boundary["lon"], 0, lon_decreasing*get_pixel_len(100) ]
-    print("color", p[0].get_color())
+    # boundary["lat"] =   pt[0] #+ -1*lat_decreasing*get_pixel_len(100)*320
+    # boundary["lon"] = pt[1] #+ -1*lon_decreasing*get_pixel_len(100)*320
+    print(boundary)
+    transform = [boundary["lat"], lat_decreasing*get_pixel_len(100),0 , boundary["lon"],0 , lon_decreasing*get_pixel_len(100) ]
+    print("transform",transform)
     leged.append(mpatches.Patch(color=p[0].get_color(), label=tiff_name))
     raster.CreateGeoTiff(tiff_name, array, transform, target.ExportToWkt())
 
