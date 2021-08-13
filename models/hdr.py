@@ -3,7 +3,7 @@ import pandas as pd
 import os 
 import platform
 
-path_sap = "/" if platform.system() != 'Windows' else "\\"
+path_sap = "/" if platform.system() != 'Windows' else '\\'
 
 def __check_frame(Fname):
     path = ""
@@ -24,7 +24,7 @@ def __check_gps(imu = "imu_gps.txt" ):
 
 def __check_files(Fname, imu):
     if not os.path.exists(Fname):
-        raise Exception("Error don\'t fund file")
+        raise Exception("Error don\'t found file")
     if(not __check_raw(Fname)):
         raise Exception("Miss raw")
     if(not __check_gps(imu)):
@@ -43,7 +43,7 @@ def get_frames(Fname):
     spt = Fname.split(path_sap)
     name = spt[-1]
     for i in spt[:-1]:
-        path = i+path_sap
+        path += i+path_sap
     del spt
     name = path+"frameIndex_"+(name.split('_')[-1].replace(".hdr", ".txt"))
     return pd.read_csv(name, sep="	")
