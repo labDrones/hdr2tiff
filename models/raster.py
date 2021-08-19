@@ -11,17 +11,15 @@ from tkinter import *
 import matplotlib.pyplot as  plt
 import matplotlib.patches as mpatches
 
-source = osr.SpatialReference()
-source.ImportFromEPSG(4326)
 
-target = osr.SpatialReference()
-target.ImportFromEPSG(32722)
 
-lonlat2utm = osr.CoordinateTransformation(source, target)
-
-def CreateGeoTiff(outRaster, data, geo_transform, projection):
+def CreateGeoTiff(outRaster, data, geo_transform, projection, no_bands = []):
     driver = gdal.GetDriverByName('GTiff')
-    rows, cols, no_bands = data.shape
+    if len(no_bands) > 0:
+        rows, cols, _  = data.shape
+    else:
+        rows, cols, no_bands = data.shape
+
     DataSet = driver.Create(outRaster, cols, rows, no_bands, gdal.GDT_UInt16)
     DataSet.SetGeoTransform(geo_transform)
     DataSet.SetProjection(projection)
@@ -48,6 +46,13 @@ def is_decreasing(imu, col):
     
 
 def get_tiffs(base_dir, voo_alt= 100, fov = 22.1):
+    source = osr.SpatialReference()
+    source.ImportFromEPSG(4326)
+
+    target = osr.SpatialReference()
+    target.ImportFromEPSG(32722)
+
+    lonlat2utm = osr.CoordinateTransformation(source, target)
     base_dir = base_dir.replace("/", "\\")
     imu_gps_name = base_dir+'\\imu_gps.txt'
 
