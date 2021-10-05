@@ -13,20 +13,23 @@ import matplotlib.patches as mpatches
 
 
 
-def CreateGeoTiff(outRaster, data, geo_transform, projection, no_bands = []):
+class Raster:
+    def __init__(self) -> None:
+        pass
+
+def CreateGeoTiff(outRaster, data, geo_transform, projection, bands = []):
     driver = gdal.GetDriverByName('GTiff')
-    if len(no_bands) > 0:
+    if len(bands) > 0:
         rows, cols, _  = data.shape
     else:
         rows, cols, no_bands = data.shape
+        bands = range(no_bands)
 
     DataSet = driver.Create(outRaster, cols, rows, no_bands, gdal.GDT_UInt16)
     DataSet.SetGeoTransform(geo_transform)
     DataSet.SetProjection(projection)
-
-    # data = np.moveaxis(data, -1, 0)
-
-    for i  in range(no_bands):
+    
+    for i  in bands:
         image = np.squeeze(data[:,:, i], axis=(2,))
         # print(i)
         DataSet.GetRasterBand(i+1).WriteArray(image)
