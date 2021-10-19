@@ -32,7 +32,9 @@ def CreateGeoTiff(outRaster, data, geo_transform, projection, bands = []):
     for i  in bands:
         image = np.squeeze(data[:,:, i], axis=(2,))
         # print(i)
+        DataSet.GetRasterBand(i+1).SetDescription("band_name")
         DataSet.GetRasterBand(i+1).WriteArray(image)
+
     DataSet = None
 
 def get_pixel_len(alt, fov):
@@ -45,6 +47,7 @@ def get_pixel_len(alt, fov):
     return len
 
 def is_decreasing(imu, col):
+    print(imu[col].diff())
     return not round(imu.iloc[0][col], 7) > round(imu.iloc[500][col],7)
     
 
@@ -70,6 +73,7 @@ def get_tiffs(base_dir, voo_alt= 100, fov = 22.1):
             continue
         
         tiff_name = hdr_name.split("/")[-1].replace("hdr", "tiff")
+        
         bounds = img_frames.loc[img_frames["Frame#"] == img_frames["Frame#"].min()].to_dict("records")
         bounds += img_frames.loc[img_frames["Frame#"] == img_frames["Frame#"].max()].to_dict("records")
 
