@@ -13,7 +13,10 @@ class Controller():
 
         #     imu =  filedialog.askopenfilename()
         #     voo.set_imu(imu)
-        print()
+        rasterizes = voo.get_rasterizes()
+        waves = voo.get_waves(rasterizes[0])
+        expression = "<500,450-780,>890, 991.5"
+        print("Waveee", waves)
         # print("tesaet", voo.get_rasterizes())
     
     def teste(self, place):
