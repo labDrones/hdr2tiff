@@ -36,12 +36,14 @@ class HDR:
 
     def __make_transform(self) -> list:
         lonlat2utm = osr.CoordinateTransformation(self.source, self.target)
+
         p1 = lonlat2utm.TransformPoint(self.frames["Lat"].max() ,self.frames["Lon"].max() )
         p2 = lonlat2utm.TransformPoint(self.frames["Lat"].min() ,self.frames["Lon"].min() )
         lon = {"Max":p1[1],"Min":p2[1] }
         lat = {"Max":p1[0],"Min":p2[0] }
-        lon_decreasing = 1 if self.frames["Lat"].is_monotonic_decreasing else -1
-        lat_decreasing = 1 if self.frames["Lon"].is_monotonic_decreasing else -1
+
+        lon_decreasing = 1 if is_decreasing(self.frames, "Lat") else -1
+        lat_decreasing = 1 if is_decreasing(self.frames, "Lon") else -1
         boundary = {}
         boundary["lat"] = lat["Min"] if lat_decreasing > 0 else lat["Max"]
         boundary["lon"] = lon["Min"] if lon_decreasing > 0 else lon["Max"]
@@ -52,25 +54,23 @@ class HDR:
         transform = self.__make_transform()
         try:
             driver = gdal.GetDriverByName('GTiff')
-            if len(bands) > 0:
-                rows, cols, _  = self.m.shape
-            else:
-                rows, cols, no_bands = self.m.shape
-                bands = range(no_bands)
+            rows, cols, _  = self.m.shape
+            no_bands = len(bands)
 
             DataSet = driver.Create(out, cols, rows, no_bands, gdal.GDT_UInt16)
             DataSet.SetGeoTransform(transform)
-            DataSet.SetProjection(self.target)
+            DataSet.SetProjection(self.target.ExportToWkt())
             
-            for band  in bands:
-                i = band.num
-                image = np.squeeze(self.m[:,:, i], axis=(2,))
-                DataSet.GetRasterBand(i+1).SetDescription(str(band.wave))
+            for i, band  in enumerate(bands):
+                # i = band.num
+                image = np.squeeze(self.m[:,:, band.num], axis=(2,))
                 DataSet.GetRasterBand(i+1).WriteArray(image)
+                DataSet.GetRasterBand(i+1).SetDescription(str(band.wave))
 
             DataSet = None
             return True
-        except:
+        except Exception as e:
+            print("execpt",e)
             return False
 
 
@@ -85,11 +85,11 @@ class Fly:
     
     def lens2focal(self, lens:float)->float:
         focal = {4.8: 50.7, 
-                8: 32.2,
-                12: 21.1,
-                17:15.3,
-                23: 12.0,
-                35: 7.8}
+                8.0: 32.2,
+                12.0: 21.1,
+                17.0:15.3,
+                23.0: 12.0,
+                35.0: 7.8}
         return focal[lens]
 
     def pixel_len(self) -> float:
@@ -107,7 +107,7 @@ class Fly:
                 ok.append(file)
         return ok 
     
-    def make_tiff_of(self, name:str, out:str = '',bands:list = []) -> bool:
+    def make_tiff_of(self, name:str,bands:list = [],  out:str = '') -> bool:
         img : spy.SpyFile = spy.open_image(name)
         frames: pd.DataFrame = self.get_frame(name)
         imu: pd.DataFrame = pd.read_csv(self.imu, sep="	")
@@ -115,11 +115,9 @@ class Fly:
         if out == '':
             out = name.split("/")[-1].replace("hdr", "tiff")
         if bands == []:
-            img.bands.centers[:5]
-            _, _, no_bands = img.shape
-            bands = range(no_bands)
+            bands = self.get_waves(name)
             
-        return hdr.totiff(out)
+        return hdr.totiff(out, bands)
     
     def get_waves(self, name:str) -> list:
         wavelens  = spy.io.envi.open(name).bands.centers
@@ -130,10 +128,12 @@ class Fly:
         return bands
     
     def reduce_intervals(self, intervals:list) ->list:
+        if len(intervals) <= 1:
+            return intervals
         sub_intervals = []
         i = 0 
         while i < len(intervals)-1:
-            if intervals[i][-1] <= intervals[i+1][0]:
+            if intervals[i][-1] >= intervals[i+1][0]:
                 new_interval = (intervals[i][0], intervals[i+1][-1])
                 sub_intervals.append(new_interval)
                 i += 1
@@ -142,21 +142,20 @@ class Fly:
                 sub_intervals.append(new_interval)
             
             i += 1
-
-        if i == len(intervals):
+            
+        if i == len(intervals)-1: 
             new_interval = (intervals[i][0], intervals[i][-1])
             sub_intervals.append(new_interval)
                 
         sub_intervals.sort(key = lambda x:x[0])
-        
         if len(sub_intervals) == len(intervals):
             return intervals
 
         return self.reduce_intervals(sub_intervals)
             
     def __get_grops(self, bands:list, interval_ex:str)->list:
-        bigger = bands[-1].wave
-        minor = 0 
+        bigger = bands[0].wave
+        minor = bands[-1].wave
         betweens = []
         once = []
         for expression in interval_ex.split(','):
@@ -169,7 +168,8 @@ class Fly:
                 if minor > num:
                     minor = num
             elif "-" in expression:
-                nums = set([float(i) for i in expression.split("-")[0,-1]].sort())
+                print(sorted([float(i) for i in expression.split("-")]))
+                nums = (sorted([float(i) for i in expression.split("-")]))
                 betweens.append(nums)
             else:
                 num = float(expression)
@@ -183,9 +183,10 @@ class Fly:
         betweens.sort(key = lambda x: x[0])
 
         betweens = self.reduce_intervals(betweens)
+        print(bigger, minor)
 
-        minor = minor if minor < bigger else bigger
-        bigger = bigger if bigger > minor else minor
+        # minor = minor if minor < bigger else bigger
+        # bigger = bigger if bigger > minor else minor
 
         if betweens[0][0] >= minor: 
             betweens.clear()
@@ -193,11 +194,24 @@ class Fly:
         if len(betweens) != 0 and betweens[-1][-1] <= bigger: 
             betweens.clear()
         
-
-
-
+        print("lostt ",betweens)
+        print(bigger, minor)
+        select_bands =[]
+        for i in range(len(bands)):
+            band: Band = bands[i]
+            if band.wave < bigger:
+                select_bands.append(band)
+            elif band.wave > minor:
+                select_bands.append(band)
+            elif band.wave in once:
+                select_bands.append(band)
+            else:
+                for interval in betweens:
+                    if interval[0] <= band.wave <= interval[1]:
+                        select_bands.append(band)
+                        break
             
-        return []
+        return select_bands
 
     def get_frame(self, hdr_name: str) -> pd.DataFrame:
         Fname = hdr_name.split(path_sap)[-1]
