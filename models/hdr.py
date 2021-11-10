@@ -90,6 +90,7 @@ class Fly:
                 17.0:15.3,
                 23.0: 12.0,
                 35.0: 7.8}
+                
         return focal[lens]
 
     def pixel_len(self) -> float:
@@ -113,7 +114,8 @@ class Fly:
         imu: pd.DataFrame = pd.read_csv(self.imu, sep="	")
         hdr = HDR(img, self.pixel_len(), frames, imu)
         if out == '':
-            out = name.split("/")[-1].replace("hdr", "tiff")
+            out = name.replace(".hdr", ".tiff")
+            print('out are: ', out)
         if bands == []:
             bands = self.get_waves(name)
             
@@ -182,13 +184,14 @@ class Fly:
         
         betweens.sort(key = lambda x: x[0])
 
+        print(betweens)
         betweens = self.reduce_intervals(betweens)
-        print(bigger, minor)
+        print(bigger, minor, betweens)
 
         # minor = minor if minor < bigger else bigger
         # bigger = bigger if bigger > minor else minor
 
-        if betweens[0][0] >= minor: 
+        if len(betweens)> 0 and betweens[0][0] >= minor: 
             betweens.clear()
 
         if len(betweens) != 0 and betweens[-1][-1] <= bigger: 
