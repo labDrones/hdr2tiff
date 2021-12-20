@@ -35,10 +35,31 @@ class Application(tk.Frame):
         self.create_log_container()
         separator = ttk.Separator(self.master, orient='horizontal')
         separator.pack(fill='x')
-    
+        self.create_orto_container()
+        separator = ttk.Separator(self.master, orient='horizontal')
+        separator.pack(fill='x')
+
+        
+    def create_orto_container(self):
+        self.orto_container = tk.Frame(self.master)
+        self.orto_container.pack()
+        self.orto_button = tk.Button(self.orto_container)
+        self.orto_button["bg"] = "#FFFF00"
+        self.orto_button["text"] = "Processar um ornto apenas\n(click me)"
+        self.orto_button["command"] = lambda: self.one_orto()
+        self.orto_button.pack(side=tk.TOP)
+
+    def one_orto(self):
+
+        expression = self.expression.get()
+        expression = expression if len(expression) > 1 else ">0"
+        
+        logs = self.controller.orto(expression)
+        print("done")
+
+        
     def create_log_container(self)->None:
         self.log_container = tk.Frame(self.master)
-
 
 
     def create_start_container(self)->None:

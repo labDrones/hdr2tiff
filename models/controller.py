@@ -1,7 +1,7 @@
 from tkinter import DoubleVar, filedialog
 import tkinter as tk
 from . import raster
-from .hdr import Fly
+from .hdr import Fly, Orto
 
 class Controller():
     def __init__(self, dir:str = '', alt:float = 100, lens:float = 12 ) -> None:
@@ -57,6 +57,11 @@ class Controller():
         place.addons[-1]["text"] = "ddss\n(click me)"
         place.addons[-1]["command"] = lambda: place.controller.teste(place)
         place.addons[-1].pack(side="bottom")
+    
+    def orto(self, expression):
+        file =  filedialog.askopenfilename(filetypes=[("HDR FILES",".hdr")])
+        o = Orto(file)
+        o.get_area(expression)
 
 
 

@@ -109,17 +109,27 @@ class Fly:
         return ok 
     
     def make_tiff_of(self, name:str,bands:list = [],  out:str = '') -> bool:
-        img : spy.SpyFile = spy.open_image(name)
-        frames: pd.DataFrame = self.get_frame(name)
-        imu: pd.DataFrame = pd.read_csv(self.imu, sep="	")
-        hdr = HDR(img, self.pixel_len(), frames, imu)
-        if out == '':
-            out = name.replace(".hdr", ".tiff")
-            print('out are: ', out)
-        if bands == []:
-            bands = self.get_waves(name)
-            
-        return hdr.totiff(out, bands)
+        vars = ["","_rd", "_rd_rf"]
+        for v in vars:
+            try:
+
+                r_out = out
+                f = name.replace(".hdr", v)
+                print("a", f)
+                img : spy.SpyFile = spy.io.envi.open(name, f)
+                frames: pd.DataFrame = self.get_frame(name)
+                imu: pd.DataFrame = pd.read_csv(self.imu, sep="	")
+                hdr = HDR(img, self.pixel_len(), frames, imu)
+                if r_out == '':
+                    r_out = f + ".tiff"
+                    print('out are: ', r_out)
+                if bands == []:
+                    bands = self.get_waves(name)
+                print(hdr.totiff(r_out, bands))
+            except:
+                None
+
+        # return hdr.totiff(out, bands)
     
     def get_waves(self, name:str) -> list:
         wavelens  = spy.io.envi.open(name).bands.centers
@@ -248,6 +258,147 @@ class Fly:
         return True
 
 
+
+class Orto:
+    def __init__(self, file:str,  EPSG_in: int = 4326, EPSG_out: int = 32722):
+        self.file_name = file
+        self.m  = spy.io.envi.open(self.file_name)
+        self.source = osr.SpatialReference()
+        self.source.ImportFromEPSG(EPSG_in)
+        self.target = osr.SpatialReference()
+        self.target.ImportFromEPSG(EPSG_out)
+
+    def get_transform(self):
+        map = self.m.metadata['map info']
+        lonlat2utm = osr.CoordinateTransformation(self.source, self.target)
+
+        p1 = np.array([map[3], map[4]]).astype(np.float)
+        t = np.array([map[5], map[6]]).astype(np.float)
+        rows, cols, _  = self.m.shape
+        return [p1[0], t[0], 0, p1[1], 0, t[1]]
+
+    def get_area(self, expression):
+        bands =  self.get_bands_by_intervals(self.get_waves(), expression)
+        out = self.file_name.replace(".hdr", ".tiff")
+        self.totiff(out, bands)
+
+    def get_waves(self) -> list:
+        wavelens  =  self.m.bands.centers
+        bands = []
+        for i, b in enumerate(wavelens):
+            band = Band(i, float(round(b, 2)))
+            bands.append(band)
+        return bands
+
+    def totiff(self, out:str, bands: list = []) -> bool:
+        transform = self.get_transform()
+        try:
+            driver = gdal.GetDriverByName('GTiff')
+            rows, cols, _  = self.m.shape
+            no_bands = len(bands)
+
+            DataSet = driver.Create(out, cols, rows, no_bands, gdal.GDT_UInt16)
+            DataSet.SetGeoTransform(transform)
+            DataSet.SetProjection(self.source.ExportToWkt())
+            
+            for i, band  in enumerate(bands):
+                # i = band.num
+                image = np.squeeze(self.m[:,:, band.num], axis=(2,))
+                DataSet.GetRasterBand(i+1).WriteArray(image)
+                DataSet.GetRasterBand(i+1).SetDescription(str(band.wave))
+
+            DataSet = None
+            return True
+        except Exception as e:
+            print("execpt",e)
+            return False
+
+    def reduce_intervals(self, intervals:list) ->list:
+        if len(intervals) <= 1:
+            return intervals
+        sub_intervals = []
+        i = 0 
+        while i < len(intervals)-1:
+            if intervals[i][-1] >= intervals[i+1][0]:
+                new_interval = (intervals[i][0], intervals[i+1][-1])
+                sub_intervals.append(new_interval)
+                i += 1
+            else:  
+                new_interval = (intervals[i][0], intervals[i][-1])
+                sub_intervals.append(new_interval)
+            
+            i += 1
+            
+        if i == len(intervals)-1: 
+            new_interval = (intervals[i][0], intervals[i][-1])
+            sub_intervals.append(new_interval)
+                
+        sub_intervals.sort(key = lambda x:x[0])
+        if len(sub_intervals) == len(intervals):
+            return intervals
+
+        return self.reduce_intervals(sub_intervals)
+            
+    def __get_grops(self, bands:list, interval_ex:str)->list:
+        bigger = bands[0].wave
+        minor = bands[-1].wave
+        betweens = []
+        once = []
+        for expression in interval_ex.split(','):
+            if "<" in expression:
+                num = float(expression.replace("<",""))
+                if bigger < num:
+                    bigger = num
+            elif ">" in expression:
+                num = float(expression.replace(">",""))
+                if minor > num:
+                    minor = num
+            elif "-" in expression:
+                print(sorted([float(i) for i in expression.split("-")]))
+                nums = (sorted([float(i) for i in expression.split("-")]))
+                betweens.append(nums)
+            else:
+                num = float(expression)
+                once.append(num)
+        return (bigger, minor, betweens, once)
+
+    def get_bands_by_intervals(self, bands:list, interval_ex:str ) -> list:
+        # <, >, -
+        bigger, minor, betweens, once = self.__get_grops(bands, interval_ex)
+        
+        betweens.sort(key = lambda x: x[0])
+
+        print(betweens)
+        betweens = self.reduce_intervals(betweens)
+        print(bigger, minor, betweens)
+
+        # minor = minor if minor < bigger else bigger
+        # bigger = bigger if bigger > minor else minor
+
+        if len(betweens)> 0 and betweens[0][0] >= minor: 
+            betweens.clear()
+
+        if len(betweens) != 0 and betweens[-1][-1] <= bigger: 
+            betweens.clear()
+        
+        print("lostt ",betweens)
+        print(bigger, minor)
+        select_bands =[]
+        for i in range(len(bands)):
+            band: Band = bands[i]
+            if band.wave < bigger:
+                select_bands.append(band)
+            elif band.wave > minor:
+                select_bands.append(band)
+            elif band.wave in once:
+                select_bands.append(band)
+            else:
+                for interval in betweens:
+                    if interval[0] <= band.wave <= interval[1]:
+                        select_bands.append(band)
+                        break
+            
+        return select_bands
 
 
 # def get_frames(Fname):
